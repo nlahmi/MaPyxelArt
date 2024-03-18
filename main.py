@@ -1,14 +1,19 @@
 import csv
 from pprint import pprint
 from decimal import Decimal
-import matplotlib.pyplot as plt
 from PIL import Image
 
-count = 185
-dot_size = 60  
-limits = {'x': [Decimal('34.376640108654158'), Decimal('35.774892331016304')],
-          'y': [Decimal('29.529264258238982'), Decimal('33.283289929186935')]}
-deltas = [limits["x"][1] - limits["x"][0], limits["y"][1] - limits["y"][0]]
+# Set all those to what you need
+DOT_COUNT = 185  # Amount of dots
+DOT_SIZE = 60    # Size of each dot (depends on the UI showing it) - not precise, just play with it
+# Imagined border in which points will be generated
+LIMITS = {"x": [Decimal("34.376640108654158"), Decimal("35.774892331016304")],
+          "y": [Decimal("29.529264258238982"), Decimal("33.283289929186935")]}
+EXISTING_POINTS_CSV = "something.csv"
+BLUEPRINT_IMG = "something.png"
+MSSQL_DB = "db_name"
+MSSQL_TABLE = "table_name"
+DEBUG = False  # Setting this requires matplotlib
 
 
 def calc_limits(r):
@@ -40,7 +45,7 @@ def calc_limits(r):
 
 def get_points():
     points = []
-    with open(r"<Original Coordinates>.csv", "r") as f:
+    with open(EXISTING_POINTS_CSV, "r") as f:
         r = csv.reader(f)
 
         first = True
@@ -61,7 +66,7 @@ def get_points():
 def get_max_image(max_pixels) -> Image:
     size = 30
 
-    im = Image.open("<BW Image>.png")
+    im = Image.open(BLUEPRINT_IMG)
     im = im.convert("P")
     im = im.resize((size, size * 2))
 
@@ -83,8 +88,9 @@ def get_max_image(max_pixels) -> Image:
 
 
 def to_mssql(points):
+    """ Gets a list of points and formats them to MSSQL queries. """
     for point in points:
-        print(f"UPDATE [<DB_NAME>].[dbo].[<TABLE_NAME] "
+        print(f"UPDATE [{MSSQL_DB}].[dbo].[{MSSQL_TABLE}] "
               f"SET Shape=geometry::STPointFromText('POINT({point[1][0]} {point[1][1]})', 4326) "
               f"WHERE OBJECTID = '{point[0]}';")
 
@@ -94,24 +100,28 @@ def main():
     points_ptr = 0
     point_count = len(points)
     im = get_max_image(point_count)
-    # points = []
+
+    deltas = [LIMITS["x"][1] - LIMITS["x"][0], LIMITS["y"][1] - LIMITS["y"][0]]
 
     for x in range(im.size[0]):
         for y in range(im.size[1]):
             if im.getpixel((x, y)):
-                adj_x = (Decimal(x / im.size[0]) * deltas[0]) + limits["x"][0]
-                adj_y = (Decimal((im.size[1] - y) / im.size[1]) * deltas[1]) + limits["y"][0]
+                adj_x = (Decimal(x / im.size[0]) * deltas[0]) + LIMITS["x"][0]
+                adj_y = (Decimal((im.size[1] - y) / im.size[1]) * deltas[1]) + LIMITS["y"][0]
                 points[points_ptr][1] = (adj_x, adj_y)
                 points_ptr += 1
-    # im.show()
+
     for point in points[points_ptr:]:
         point[1] = points[0][1]
 
     to_mssql(points)
-    # pprint(points)
-    # plt.scatter(*zip(*points), s=dot_size)
-    # plt.subplots_adjust(0, 0, float(deltas[0] / deltas[1]), 1)
-    # plt.show()
+    if DEBUG:
+        import matplotlib.pyplot as plt
+        pprint(points)
+
+        plt.scatter(*zip(*points), s=dot_size)
+        plt.subplots_adjust(0, 0, float(deltas[0] / deltas[1]), 1)
+        plt.show()
 
 
 if __name__ == "__main__":
